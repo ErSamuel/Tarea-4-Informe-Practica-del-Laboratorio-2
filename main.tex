@@ -1,0 +1,398 @@
+\documentclass{article}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage[margin=1in]{geometry}
+
+\title{Informe Practica 2}
+\author{Samuel Primera C.I: 31.129.684, Samuel Reyna CI: 30.210.759}
+\date{15 de Julio 2025}
+
+\begin{document}
+
+\maketitle
+
+\section{¿Qué diferencias existen entre registros temporales (\texttt{\$t0-\$t9}) y registros guardados (\texttt{\$s0-\$s7}) y cómo se aplicó esta distinción en la práctica?}
+
+\textbf{Diferencias:}
+\begin{itemize}
+    \item \textbf{Registros temporales (\texttt{\$t0-\$t9}):} 
+    El procedimiento llamador debe guardarlos en la pila antes de invocar una subrutina, pues el invocado puede modificarlos.
+    \item \textbf{Registros guardados (\texttt{\$s0-\$s7}):} El procedimiento invocado debe preservarlos: los guarda al inicio y los restaura antes de retornar.
+\end{itemize}
+
+\textbf{Aplicación práctica:}
+\begin{itemize}
+    \item En \textbf{bubble sort}:
+    \begin{itemize}
+        \item \texttt{\$s0} y \texttt{\$s1} almacenan tamaño del arreglo y dirección base (valores persistentes).
+        \item Guarda/restaura \texttt{\$s0-\$s3} y \texttt{\$ra} al invocar. \texttt{swap}
+    \end{itemize}
+    \item En \textbf{insertion sort}:
+    \begin{itemize}
+        \item \texttt{\$t0}, \texttt{\$t1} para índices (\texttt{i}, \texttt{j}) o valores temporales
+        \item No se guardan antes de llamadas: responsabilidad del llamador.
+    \end{itemize}
+\end{itemize}
+
+\section{¿Qué diferencias existen entre los registros \texttt{\$a0-\$a3}, \texttt{\$v0-\$v1}, \texttt{\$ra} y cómo se aplicó esta distinción en la práctica?}
+
+\begin{itemize}
+    \item \textbf{Registros de argumentos (\texttt{\$a0}--\texttt{\$a3})}  
+    \begin{itemize}
+        \item Pasan parámetros de un procedimiento llamador a uno invocado (hasta 4 parámetros).
+        \item Parámetros adicionales se almacenan en la pila.
+    \end{itemize}
+    
+    \item \textbf{Registros de retorno (\texttt{\$v0}--\texttt{\$v1})} 
+    \begin{itemize}
+        \item Devuelven valores desde el procedimiento invocado al llamador.
+    \end{itemize}
+    
+    \item \textbf{Registro de dirección de retorno (\texttt{\$ra})} 
+    \begin{itemize}
+        \item Almacena la dirección de retorno tras una llamada a procedimiento.
+        \item Se usa \texttt{jr \$ra} para regresar al punto de llamada.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Aplicación práctica (ejemplo en \texttt{Burbuja.txt})}
+
+\begin{itemize}
+    \item \textbf{\texttt{\$v0}:} 
+    \begin{itemize}
+        \item Gestiona llamadas al sistema: entrada (\texttt{li \$v0, 5}), impresión de cadenas (\texttt{li \$v0, 4}) y terminación del programa (\texttt{li \$v0, 10}).
+    \end{itemize}
+    
+    \item \textbf{\texttt{\$a0}--\texttt{\$a1}:} 
+    \begin{itemize}
+        \item Transferencia de parámetros en procedimientos (ej: \texttt{sort} recibe \texttt{v} y \texttt{n} en \texttt{\$a0}/\texttt{\$a1}; \texttt{swap} usa los mismos para \texttt{v} y \texttt{j}).
+    \end{itemize}
+    
+    \item \textbf{\texttt{\$ra}:} 
+    \begin{itemize}
+        \item Se guarda en la pila al inicio de \texttt{sort} y se restaura antes de retornar.
+        \item Permite retornos anidados correctos (\texttt{sort} $\rightarrow$ \texttt{swap} $\rightarrow$ \texttt{sort} $\rightarrow$ llamador original mediante \texttt{jr \$ra}).
+    \end{itemize}
+\end{itemize}
+
+\section{¿Cómo afecta el uso de registros frente a memoria en el rendimiento de los algoritmos de ordenamiento implementados?}
+
+\subsection*{Ventajas del uso de registros}
+\begin{itemize}
+    \item \textbf{Máxima velocidad}: Los registros son el recurso más rápido para almacenar datos
+    \item \textbf{Acceso eficiente}: MIPS32 cuenta con 32 registros, permitiendo mantener variables críticas cerca de la CPU.
+    \item \textbf{Reducción de accesos}: Minimiza operaciones lentas al priorizar datos frecuentes.
+\end{itemize}
+
+\subsection*{Desventajas del uso de memoria}
+\begin{itemize}
+    \item \textbf{Lentitud inherente}: La memoria principal es significativamente más lenta que los registros
+    \item \textbf{Riesgos en el pipeline}: Accesos causan \textit{stalls} por \textit{load-use hazards}.
+    \item \textbf{Fallos de caché críticos}: Datos ausentes obligan a acceder a niveles más lentos.
+    \item \textbf{Operaciones inevitables}: Algoritmos requieren accesos constantes mediante \texttt{lw}/\texttt{sw}.
+\end{itemize}
+
+\subsection*{Implicaciones para algoritmos de ordenamiento}
+\begin{itemize}
+    \item \textbf{Limitación práctica}:
+    \begin{itemize}[label=--]
+        \item Variables activas en registros, pero \textbf{datos masivos en memoria}.
+    \end{itemize}
+    
+    \item \textbf{Importancia de la jerarquía}:
+    \begin{itemize}[label=--]
+        \item El rendimiento depende del \textit{patrón de acceso} más que del conteo de instrucciones.
+
+\section{¿Qué impacto tiene el uso de estructuras de control (bucles anidados, saltos) en la eficiencia de los algoritmos en MIPS32?}
+
+Los ciclos anidados influyen principalmente en el tiempo de ejecución de un algoritmo. Dependiendo de cómo se implementen, pueden aumentar significativamente el orden de complejidad computacional (por ejemplo, transformando una complejidad lineal O(n) en cuadrática O(n²) o incluso exponencial). Esto ocasiona múltiples operaciones redundantes de lectura y sobreescritura en los elementos del arreglo, ya sea de forma parcial o total. Como consecuencia, se generan cuellos de botella en el acceso a memoria, uso excesivo de recursos del sistema y lentitud generalizada para completar la tarea encomendada, especialmente con volúmenes grandes de datos.
+
+\section{¿Cuáles son las diferencias de complejidad computacional entre el algoritmo Bubble Sort e Insertion Sort? ¿Qué implicaciones tiene esto para MIPS32?}
+
+\textbf{Complejidad computacional:}
+\begin{center}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Algoritmo} & \textbf{Peor caso} & \textbf{Mejor caso} & \textbf{Caso promedio} \\
+        \midrule
+        Bubble Sort & $O(n^2)$ & $O(n)$ & $O(n^2)$ \\
+        Insertion Sort & $O(n^2)$ & $O(n)$ & $O(n^2)$ \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+\textbf{Implicaciones en MIPS32:}
+\begin{itemize}
+    \item \textbf{Rendimiento con $n$ grande}: 
+    \begin{itemize}
+        \item $n=100k \Rightarrow \approx 10^{10}$ operaciones.
+    \end{itemize}
+    \item \textbf{Cuellos de botella}:
+    \begin{itemize}
+        \item Accesos a memoria dominan tiempo de ejecución.
+        \item Bucles anidados exacerban riesgos de control.
+    \end{itemize}
+\end{itemize}
+
+\section{¿Cuáles son las fases del ciclo de ejecución de instrucciones en la arquitectura MIPS32 
+(camino de datos)? ¿En qué consisten? }
+
+El ciclo de ejecución en MIPS32 se divide en \textbf{cinco etapas} en una implementación segmentada:
+
+\begin{enumerate}
+  \item \textbf{Búsqueda de Instrucción (IF)}:
+    \begin{itemize}
+      \item Lee la instrucción de memoria usando la dirección del \textit{Program Counter (PC)}.
+      \item Incrementa el PC en 4 (siguiente instrucción).
+      \item Almacena la instrucción y PC+4 en el registro\textit{IF/ID}.
+    \end{itemize}
+  
+  \item \textbf{Decodificación y Lectura de Registros (ID)}:
+    \begin{itemize}
+      \item Decodifica la instrucción y lee registros fuente del banco de registros.
+      \item Extiende inmediatos con signo (si aplica).
+      \item Transmite datos al registro \textit{ID/EX}.
+    \end{itemize}
+  
+  \item \textbf{Ejecución (EX)}:
+    \begin{itemize}
+      \item La ALU realiza operaciones:
+        \begin{itemize}
+          \item Aritméticas/lógicas (ej: \texttt{add}, \texttt{sub}).
+          \item Cálculo de direcciones (ej: \texttt{lw \$t0, 4(\$s1)}).
+          \item Comparaciones para saltos (ej: \texttt{beq}, \texttt{bne}).
+        \end{itemize}
+      \item Resultados se guardan en \textit{EX/MEM}.
+    \end{itemize}
+  
+  \item \textbf{Acceso a Memoria (MEM)}:
+    \begin{itemize}
+      \item Accede a memoria solo para \texttt{lw} (carga) o \texttt{sw} (almacenamiento).
+      \item Instrucciones no relacionadas con memoria pasan directamente a \textit{MEM/WB}.
+    \end{itemize}
+  
+  \item \textbf{Escritura de Resultado (WB)}:
+    \begin{itemize}
+      \item Escribe resultados en el banco de registros:
+        \begin{itemize}
+          \item Desde la ALU (instrucciones tipo R).
+          \item Desde memoria (instrucciones \texttt{lw}).
+        \end{itemize}
+    \end{itemize}
+\end{enumerate}
+
+\section{¿Qué tipo de instrucciones se usaron predominantemente en la práctica (R, I, J) y por qué?}
+
+En algoritmos como \textbf{bubble sort} e \textbf{insertion sort}, predominan:
+
+\begin{itemize}
+  \item \textbf{Tipo I (Inmediatas)}:
+    \begin{itemize}
+      \item \texttt{lw}/\texttt{sw}: Acceso a elementos del array en memoria (ej: \texttt{lw \$t0, 0(\$s1)}).
+      \item \texttt{addi}/\texttt{li}: Manipulación de constantes (contadores, índices).
+      \item \texttt{beq}/\texttt{bne}: Bifurcaciones para bucles y condicionales.
+    \end{itemize}
+  \item \textbf{Tipo R (Registros)}:
+    \begin{itemize}
+      \item \texttt{add}/\texttt{sub}/\texttt{sll}: Operaciones aritméticas y comparaciones (ej: \texttt{sll \$t2, \$t0, \$t1}).
+    \end{itemize}
+  \item \textbf{Tipo J (Saltos)}:
+    \begin{itemize}
+      \item \texttt{j}/\texttt{jal}: Menos frecuentes (saltos incondicionales o llamadas a funciones como \texttt{swap}).
+    \end{itemize}
+\end{itemize}
+
+Los algoritmos de ordenamiento requieren acceso constante a arrays (\texttt{lw}/\texttt{sw}), manipulación de índices (\texttt{addi}), y bifurcaciones para bucles (\texttt{beq}/\texttt{bne}). Las operaciones aritméticas (\texttt{add}, \texttt{sll}) son esenciales para comparaciones e intercambios.
+
+\section{¿Cómo se ve afectado el rendimiento si se abusa del uso de instrucciones de salto (j, beq, 
+bne) en lugar de usar estructuras lineales? }
+
+\begin{itemize}
+  \item \textbf{Riesgos de control en el pipeline}:
+    \begin{itemize}
+      \item Los saltos obligan a detener el pipeline (\textit{ paradas de la tubería o pipeline stalls}) hasta resolver la dirección destino.
+      \item Se insertan "burbujas" (ciclos inactivos), desperdiciando recursos.
+    \end{itemize}
+  \item \textbf{Penalización por predicción incorrecta}:
+    \begin{itemize}
+      \item Si falla la predicción de saltos, se descartan instrucciones ya procesadas (mayor penalización en pipelines profundos).
+    \end{itemize}
+  \item \textbf{Estructuras lineales vs. Saltos}:
+    \begin{itemize}
+      \item Código lineal minimiza saltos, maximizando paralelismo (\textit{ILP}) y evitando paradas
+      \item Técnicas como \textit{loop unrolling} (o desenrollado de bucles) reducen saltos en bucles, optimizando el flujo
+    \end{itemize}
+\end{itemize}
+
+\section{¿Qué ventajas ofrece el modelo RISC de MIPS en la implementación de algoritmos 
+básicos como los de ordenamiento? }
+
+\begin{itemize}
+  \item \textbf{Simplicidad y regularidad}:
+    \begin{itemize}
+      \item Instrucciones de 32 bits fijas y formato uniforme (3 operandos) facilitan la decodificación
+    \end{itemize}
+  \item \textbf{Pipeline eficiente}:
+    \begin{itemize}
+      \item Etapas balanceadas permiten alta frecuencia de reloj y paralelismo
+    \end{itemize}
+  \item \textbf{Arquitectura load/store}:
+    \begin{itemize}
+      \item Separación clara entre operaciones (ALU) y acceso a memoria (\texttt{lw}/\texttt{sw})
+    \end{itemize}
+  \item \textbf{32 registros de propósito general}:
+    \begin{itemize}
+      \item Variables frecuentes (índices, contadores) se mantienen en registros, reduciendo accesos a memoria
+    \end{itemize}
+  \item \textbf{Optimización de compiladores}:
+    \begin{itemize}
+      \item Facilita técnicas como \textit{loop unrolling}(desenrollado de bucles) o reordenamiento de instrucciones
+    \end{itemize}
+\end{itemize}
+
+\section{ ¿Cómo se usó el modo de ejecución paso a paso (Step, Step Into) en MARS para verificar 
+la correcta ejecución del algoritmo? }
+
+\textbf{Funcionalidad}:
+\begin{itemize}
+  \item \textbf{Step}: Ejecuta una instrucción, ignorando detalles de funciones llamadas (ej: \texttt{jal swap}).
+  \item \textbf{Step Into}: Ingresa a funciones para depurar internamente (ej: instrucciones dentro de \texttt{swap}).
+\end{itemize}
+
+\textbf{Verificación en algoritmos}:
+\begin{enumerate}
+  \item \textbf{Flujo de control}:
+    \begin{itemize}
+      \item Confirma que bucles y bifurcaciones se ejecuten correctamente (ej: \texttt{beq} en \textit{bubble sort}).
+    \end{itemize}
+  \item \textbf{Estado del procesador}:
+    \begin{itemize}
+      \item Monitorea registros (ej: \texttt{\$t0} para índices, \texttt{\$s0} para dirección del array)
+      \item Verifica valores en memoria después de \texttt{lw}/\texttt{sw} (intercambios en \textit{insertion sort}).
+    \end{itemize}
+  \item \textbf{Detección de errores lógicos}:
+    \begin{itemize}
+      \item Identifica comparaciones incorrectas (\texttt{sll}) o intercambios inválidos.
+    \end{itemize}
+\end{enumerate}
+
+\section{¿Qué herramienta de MARS fue más útil para observar el contenido de los registros y detectar errores lógicos?}
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Ventana de Registros (Register Window)}
+    \begin{itemize}
+        \item \textbf{Acceso}: Menú Tools > Registers (panel derecho).
+        \item \textbf{Funcionalidad}:
+        \begin{itemize}
+            \item Muestra en tiempo real los 32 registros de propósito general.
+            \item Valores actualizados en hexadecimal/decimal.
+            \item Edición manual directa.
+        \end{itemize}
+        \item \textbf{Depuración}:
+        \begin{itemize}
+            \item Detección de registros no inicializados.
+            \item Identificación de sobrescrituras accidentales.
+            \item Verificación de valores intermedios.
+        \end{itemize}
+    \end{itemize}
+
+    \item \textbf{Ejecución Paso a Paso (Single Stepping)}
+    \begin{itemize}
+        \item \textbf{Controles}:
+        \begin{itemize}
+            \item Step: Avance instrucción por instrucción.
+            \item Backstep (v4.5+): Retroceso de instrucciones.
+        \end{itemize}
+        \item \textbf{Aplicación}:
+        \begin{itemize}
+            \item Rastreo de saltos erróneos (beq, bne).
+            \item Detección de bucles infinitos.
+            \item Análisis de flujo de control.
+        \end{itemize}
+    \end{itemize}
+
+    \item \textbf{Puntos de Interrupción (Breakpoints)}
+    \begin{itemize}
+        \item \textbf{Implementación}: Clic en margen izquierdo del editor.
+        \item \textbf{Ventajas}:
+        \begin{itemize}
+            \item Pausa ejecución en líneas críticas.
+            \item Depuración selectiva de funciones/bucles.
+            \item Combinación con ventana de registros.
+        \end{itemize}
+    \end{itemize}
+
+    \item \textbf{Ventana de Memoria (Data Segment)}.
+    \begin{itemize}
+        \item \textbf{Acceso}: Tools > Data Segment.
+        \item \textbf{Capacidades}:
+        \begin{itemize}
+            \item Visualización de arreglos/variables globales.
+            \item Edición hexadecimal/decimal/ASCII.
+            \item Monitoreo de reserva de espacio (.data, .text).
+        \end{itemize}
+        \item \textbf{Errores detectables}:
+        \begin{itemize}
+            \item Desbordamientos de buffers.
+            \item Accesos a memoria inválidos (lw/sw).
+        \end{itemize}
+    \end{itemize}
+
+\end{enumerate}
+
+\section{¿Cómo puede visualizarse en MARS el camino de datos para una instrucción tipo R? (por ejemplo: add)}
+
+\begin{enumerate}
+    \item Abre MARS y carga tu código (ej: \texttt{add \$t0,\$t0,\$t1}).
+    
+    \item Ve al menú \texttt{Tools $\rightarrow$ MIPS X-Ray}.
+    
+    \begin{itemize}
+        \item Se abrirá una ventana nueva con el diagrama del datapath completo.
+    \end{itemize}
+    
+    \item Ejecuta paso a paso:
+    \begin{itemize}
+        \item Usa el botón \texttt{Step} (o \texttt{F7}) para avanzar instrucción por instrucción.
+        \item \texttt{MIPS X-Ray} resaltará en rojo las rutas y componentes activos durante cada ciclo de reloj.
+    \end{itemize}
+\end{enumerate}
+\textit{MARS resalta componentes (ALU, banco de registros) y registros intermedios (ID/EX, EX/MEM) durante la ejecución.}
+
+\section{¿Cómo puede visualizarse en MARS el camino de datos para una instrucción tipo I? (por ejemplo: lw)}
+
+\begin{enumerate}
+    \item Abre MARS y carga tu código (ej: \texttt{lw \$a0, 0(\$s1)}). % Corregidos símbolos $ y paréntesis
+    
+    \item Ve al menú \texttt{Tools $\rightarrow$ MIPS X-Ray}.
+    
+    \begin{itemize}
+        \item Se abrirá una ventana nueva con el diagrama del datapath completo.
+    \end{itemize}
+    
+    \item Ejecuta paso a paso:
+    \begin{itemize}
+        \item Usa el botón \texttt{Step} (o \texttt{F7}) para avanzar instrucción por instrucción.
+        \item \texttt{MIPS X-Ray} resaltará en rojo las rutas y componentes activos durante cada ciclo de reloj.
+    \end{itemize}
+\end{enumerate}
+
+\section{Justificar la elección del algoritmo alternativo}
+
+Principalmente por su forma de ejecución. Aunque en promedio ambos tienen un orden de complejidad \(O(n^2)\), el \textsc{Insertion Sort} inserta cada elemento en su posición correcta directamente, mientras que el algoritmo \textsc{Bubble Sort} debe comparar y posiblemente intercambiar elementos uno por uno.
+
+Aunque en casos muy particulares puedan parecer similares, el \textsc{Insertion Sort} resulta una opción más eficiente que el \textsc{Bubble Sort}. Otro punto a su favor es su legibilidad: a pesar de ser un algoritmo un poco más complejo que el \textsc{Bubble Sort}, su funcionamiento es fácil de entender, lo que facilita su implementación para el ordenamiento de arreglos.
+
+\section{ Análisis y Discusión de los Resultados}
+
+Tanto leer los datos de entrada como imprimirlos en ambos algoritmos es similar. Ambos toman el tamaño del arreglo y ejecutan un ciclo para leer los valores del mismo, y otro para imprimirlos. La diferencia radica en la función de ordenamiento.
+
+El algoritmo \textsc{Bubble Sort} necesita dos ciclos: se inicializa el índice superior en \(n-1\) para evitar intercambiar elementos que se salgan del rango del vector, y la bandera de intercambios también se inicializa. Luego, se entra en el primer bucle, reiniciando el contador en \(0\) y la bandera de intercambios. Después, se entra en el segundo bucle, el cual verifica y actualiza el contador y realiza el intercambio de elementos de ser necesario. Esto último se verifica en la etiqueta \texttt{end\_inner}, que se encarga de revisar si hubo un intercambio. De ser así, se retorna al ciclo exterior para reiniciar la bandera y el contador, ya que no son necesarios más intercambios. En caso contrario, se disminuye el rango y se devuelve al ciclo exterior para continuar. Al terminar de ordenar los elementos, se retorna a la función principal para imprimir los elementos ya ordenados.
+
+El \textsc{Insertion Sort}, al igual que el burbuja, necesita dos ciclos. Inicializa sus pasos (\emph{steps}) en \(1\) y entra en el primer ciclo. Se guarda el dato a insertar en el arreglo y entra al segundo ciclo, donde se van moviendo de lugar los elementos necesarios para insertar el elemento en la posición correcta. Esto se repite hasta que todos los elementos estén en sus respectivos lugares. Finalmente, se retorna a la función principal para imprimir los elementos ya ordenados.
+
+En conclusión, aunque ambos algoritmos realizan la misma tarea, se puede ver una clara diferencia en su ejecución. También cabe destacar que, en cuanto a eficiencia, si bien ambos tienen la misma complejidad \(O(n^2)\), el \textsc{Insertion Sort} es ligeramente más rápido, ya que no tiene que detenerse constantemente a verificar si el elemento es intercambiable.
+\end{document}
